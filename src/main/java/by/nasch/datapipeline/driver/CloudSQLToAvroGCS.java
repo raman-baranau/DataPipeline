@@ -97,9 +97,8 @@ public class CloudSQLToAvroGCS {
                 .apply("Convert JSON to Avro generic record", ParDo.of(new JsonToGenericRecordFn(schema)))
                 .setCoder(AvroGenericCoder.of(schema))
                 .apply("Write to GCS",
-                        AvroIO.<GenericRecord>writeGenericRecords(schema)
+                        AvroIO.writeGenericRecords(schema)
                                 .to(options.getOutputFile())
-                                .withoutSharding()
                                 .withSuffix(".avro"));
         pipeline.run().waitUntilFinish();
     }
