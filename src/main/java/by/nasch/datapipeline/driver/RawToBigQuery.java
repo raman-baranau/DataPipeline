@@ -1,5 +1,6 @@
 package by.nasch.datapipeline.driver;
 
+import by.nasch.datapipeline.fn.CounterMetricFn;
 import com.google.api.services.bigquery.model.TableRow;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
@@ -12,12 +13,17 @@ import org.apache.beam.sdk.io.AvroIO;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryUtils;
 import org.apache.beam.sdk.io.gcp.bigquery.TableRowJsonCoder;
+import org.apache.beam.sdk.metrics.Counter;
+import org.apache.beam.sdk.metrics.Metrics;
 import org.apache.beam.sdk.options.*;
 import org.apache.beam.sdk.schemas.utils.AvroUtils;
 import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.util.RowJson;
 import org.apache.beam.sdk.util.RowJsonUtils;
+import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.POutput;
 import org.apache.beam.sdk.values.Row;
 
 import java.io.ByteArrayInputStream;
@@ -109,12 +115,12 @@ public class RawToBigQuery {
                 .apply("Perform SQL Transform",
                         SqlTransform.query("SELECT * from PCOLLECTION limit 5"))
                 .apply("Convert Row to TableRow", ParDo.of(new RowToTableRow(schema)))
-                .apply("Write data to BigQuery",
+                .apply("Write data to BigQuery", CounterAndWriteUnited.of(
                         BigQueryIO.writeTableRows()
                                 .withSchema(BigQueryUtils.toTableSchema(AvroUtils.toBeamSchema(schema)))
                                 .withCreateDisposition(options.getCreateDisposition())
                                 .withWriteDisposition(options.getWriteDisposition())
-                                .to(options.getOutputTable()));
+                                .to(options.getOutputTable())));
         p.run().waitUntilFinish();
     }
 
@@ -189,5 +195,29 @@ public class RawToBigQuery {
             TableRow row = convertJsonToTableRow(json);
             c.output(row);
         }
+    }
+}
+
+class CounterAndWriteUnited<T, OutputT extends POutput> extends PTransform<PCollection<T>, OutputT> {
+
+    private static final String NAMESPACE = "by.nasch.datapipeline";
+    private static final String METRIC_COUNTER = "count_bq_writes";
+    private final PTransform<PCollection<T>, OutputT> wrappedTransform;
+    private final Counter counter = Metrics.counter(NAMESPACE, METRIC_COUNTER);
+
+    public CounterAndWriteUnited(PTransform<PCollection<T>, OutputT> wrappedTransform) {
+        this.wrappedTransform = wrappedTransform;
+    }
+
+    @Override
+    public OutputT expand(PCollection<T> input) {
+        PCollection<T> sinkInput =
+                input.apply("Count sink input", ParDo.of(new CounterMetricFn<>(counter)));
+        return wrappedTransform.expand(sinkInput);
+    }
+
+    public static <T, OutputT extends POutput> CounterAndWriteUnited<T, OutputT>
+    of(PTransform<PCollection<T>, OutputT> sinkTransform) {
+        return new CounterAndWriteUnited<>(sinkTransform);
     }
 }
