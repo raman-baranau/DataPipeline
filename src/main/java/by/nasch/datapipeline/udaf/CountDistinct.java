@@ -5,29 +5,29 @@ import java.util.Set;
 
 import static org.apache.beam.sdk.transforms.Combine.CombineFn;
 
-public class CountDistinct extends CombineFn<Long, Set<Long>, Integer> {
+public class CountDistinct extends CombineFn<Object, Set<Object>, Integer> {
     @Override
-    public Set<Long> createAccumulator() {
+    public Set<Object> createAccumulator() {
         return new HashSet<>();
     }
 
     @Override
-    public Set<Long> addInput(Set<Long> mutableAccumulator, Long input) {
+    public Set<Object> addInput(Set<Object> mutableAccumulator, Object input) {
         mutableAccumulator.add(input);
         return mutableAccumulator;
     }
 
     @Override
-    public Set<Long> mergeAccumulators(Iterable<Set<Long>> accumulators) {
-        Set<Long> set = new HashSet<>();
-        for (Set<Long> accumulator : accumulators) {
+    public Set<Object> mergeAccumulators(Iterable<Set<Object>> accumulators) {
+        Set<Object> set = new HashSet<>();
+        for (Set<Object> accumulator : accumulators) {
             set.addAll(accumulator);
         }
         return set;
     }
 
     @Override
-    public Integer extractOutput(Set<Long> accumulator) {
+    public Integer extractOutput(Set<Object> accumulator) {
         return accumulator.size();
     }
 }
