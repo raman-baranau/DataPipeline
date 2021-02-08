@@ -16,6 +16,8 @@ import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.transforms.SerializableFunction;
 import org.apache.beam.sdk.values.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class RawToBigQueryUdaf {
 
@@ -84,6 +86,7 @@ public class RawToBigQueryUdaf {
             "    \"type\" : [ \"long\", \"null\" ]\n" +
             "  } ]\n" +
             "}";
+    private static final Logger LOGGER = LoggerFactory.getLogger(RawToBigQueryUdaf.class);
 
     public interface RawToBigQueryUdafOptions extends BeamSqlPipelineOptions {
         @Validation.Required
@@ -141,6 +144,8 @@ public class RawToBigQueryUdaf {
                                 .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_NEVER)
                                 .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
                                 .to(options.getOutputTable()));
+        LOGGER.debug("Job before pipeline run.");
         p.run().waitUntilFinish();
+        LOGGER.debug("Job finished.");
     }
 }
