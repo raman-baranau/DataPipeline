@@ -14,6 +14,6 @@ public class CounterMetricFn<T> extends DoFn<T, T> {
     @ProcessElement
     public void processElement(ProcessContext context) {
         counter.inc();
-        context.output(context.element());
+        context.output(context.element());//null
     }
 }

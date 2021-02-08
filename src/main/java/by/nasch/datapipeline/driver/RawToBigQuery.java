@@ -25,6 +25,8 @@ import org.apache.beam.sdk.util.RowJsonUtils;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.POutput;
 import org.apache.beam.sdk.values.Row;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -99,6 +101,8 @@ public class RawToBigQuery {
             "  } ]\n" +
             "}";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RawToBigQuery.class);
+
     public static void main(String[] args) {
         RawToBigQueryOptions options =
                 PipelineOptionsFactory.fromArgs(args)
@@ -122,6 +126,7 @@ public class RawToBigQuery {
                                 .withWriteDisposition(options.getWriteDisposition())
                                 .to(options.getOutputTable())));
         p.run().waitUntilFinish();
+        LOGGER.debug("Raw To BigQuery job finished.");
     }
 
     public interface RawToBigQueryOptions extends BeamSqlPipelineOptions {

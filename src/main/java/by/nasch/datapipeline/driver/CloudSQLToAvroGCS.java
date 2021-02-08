@@ -12,6 +12,8 @@ import org.apache.beam.sdk.io.jdbc.JdbcIO;
 import org.apache.beam.sdk.options.*;
 import org.apache.beam.sdk.transforms.DoFn;
 import org.apache.beam.sdk.transforms.ParDo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import tech.allegro.schema.json2avro.converter.JsonAvroConverter;
 
 import java.nio.charset.StandardCharsets;
@@ -85,6 +87,8 @@ public class CloudSQLToAvroGCS {
             "  } ]\n" +
             "}";
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(CloudSQLToAvroGCS.class);
+
     public static void main(String[] args) {
         CloudSQLToAvroGCSOptions options =
                 PipelineOptionsFactory.fromArgs(args)
@@ -101,6 +105,7 @@ public class CloudSQLToAvroGCS {
                                 .to(options.getOutputFile())
                                 .withSuffix(".avro"));
         pipeline.run().waitUntilFinish();
+        LOGGER.debug("Writing from cloud SQl to GCS finished.");
     }
 
     public interface CloudSQLToAvroGCSOptions extends PipelineOptions {
