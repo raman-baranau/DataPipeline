@@ -1,0 +1,10 @@
+{
+  "name": "sample-pubsub",
+  "version": "0.0.1",
+  "dependencies": {
+    "@google-cloud/monitoring": "^2.2.0",
+    "@google-cloud/pubsub": "^0.18.0",
+    "@google-cloud/bigquery": "^5.5.0",
+    "googleapis": "^67.0.0"
+  }
+}
