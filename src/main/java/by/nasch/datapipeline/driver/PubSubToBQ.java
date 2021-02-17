@@ -246,11 +246,13 @@ public class PubSubToBQ {
                 .apply("Convert JSON to Avro generic record",
                         ParDo.of(new JsonToIdFn()))
                 .apply("Split to windows",
-                        Window.<List<Long>>into(FixedWindows.of(Duration.standardMinutes(5)))
-                                .withAllowedLateness(Duration.standardMinutes(1))
+                        Window.<List<Long>>into(FixedWindows.of(Duration.standardMinutes(1)))
                                 .triggering(AfterWatermark.pastEndOfWindow()
+                                        .withEarlyFirings(AfterProcessingTime.pastFirstElementInPane()
+                                                .plusDelayOf(Duration.standardSeconds(30)))
                                         .withLateFirings(AfterPane.elementCountAtLeast(1)))
-                                .discardingFiredPanes());
+                                .discardingFiredPanes()
+                                .withAllowedLateness(Duration.standardSeconds(15)));
 
         PCollection<String> enrichedData = input
                 .apply("Collect window ids",
