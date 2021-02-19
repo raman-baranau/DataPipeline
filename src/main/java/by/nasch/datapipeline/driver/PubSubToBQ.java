@@ -1,110 +1,36 @@
 package by.nasch.datapipeline.driver;
 
+import by.nasch.datapipeline.schema.BQPubSubTableSchema;
+import by.nasch.datapipeline.combine.CollectIds;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.api.services.bigquery.model.TableRow;
 import com.google.gson.Gson;
-import org.apache.avro.Schema;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.beam.sdk.Pipeline;
-import org.apache.beam.sdk.coders.AvroGenericCoder;
-import org.apache.beam.sdk.coders.Coder;
-import org.apache.beam.sdk.coders.RowCoder;
-import org.apache.beam.sdk.coders.StringUtf8Coder;
+import org.apache.beam.sdk.coders.*;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryUtils;
-import org.apache.beam.sdk.io.gcp.bigquery.TableRowJsonCoder;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.io.jdbc.JdbcIO;
 import org.apache.beam.sdk.options.*;
-import org.apache.beam.sdk.schemas.utils.AvroUtils;
 import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.transforms.join.CoGbkResult;
+import org.apache.beam.sdk.transforms.join.CoGroupByKey;
+import org.apache.beam.sdk.transforms.join.KeyedPCollectionTuple;
 import org.apache.beam.sdk.transforms.windowing.*;
-import org.apache.beam.sdk.util.RowJson;
-import org.apache.beam.sdk.util.RowJsonUtils;
+import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
-import org.apache.beam.sdk.values.Row;
+import org.apache.beam.sdk.values.TupleTag;
 import org.joda.time.Duration;
-import tech.allegro.schema.json2avro.converter.JsonAvroConverter;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public class PubSubToBQ {
-
-    private static final String SCHEMA = "{\n" +
-            "  \"type\" : \"record\",\n" +
-            "  \"name\" : \"topLevelRecord\",\n" +
-            "  \"fields\" : [ {\n" +
-            "    \"name\" : \"id\",\n" +
-            "    \"type\" : [ \"long\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"date_time\",\n" +
-            "    \"type\" : [ \"string\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"site_name\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"posa_continent\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"user_location_country\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"user_location_region\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"user_location_city\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"orig_destination_distance\",\n" +
-            "    \"type\" : [ \"double\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"user_id\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"is_mobile\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"is_package\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"channel\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_ci\",\n" +
-            "    \"type\" : [ \"string\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_co\",\n" +
-            "    \"type\" : [ \"string\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_adults_cnt\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_children_cnt\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_rm_cnt\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_destination_id\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"srch_destination_type_id\",\n" +
-            "    \"type\" : [ \"int\", \"null\" ]\n" +
-            "  }, {\n" +
-            "    \"name\" : \"hotel_id\",\n" +
-            "    \"type\" : [ \"long\", \"null\" ]\n" +
-            "  } ]\n" +
-            "}";
 
     public interface PubSubToBQOptions extends PipelineOptions {
         @Validation.Required
@@ -137,45 +63,26 @@ public class PubSubToBQ {
         void setOutputTable(ValueProvider<String> value);
     }
 
-    private static class JsonToIdFn extends DoFn<String, List<Long>> {
+    private static class JsonToIdFn extends DoFn<String, KV<Long, String>> {
 
         @ProcessElement
         public void processElement(ProcessContext c) {
             String json = c.element();
             Gson gson = new Gson();
             Map<String,Object> result = gson.fromJson(json, Map.class);
-            c.output(new ArrayList<Long>(){{
-                add(((Double) result.get("id")).longValue());
-            }});
+            c.output(KV.of(((Double) result.get("id")).longValue(), json));
         }
     }
 
-    private static class JsonToGenericRecordFn extends DoFn<String, GenericRecord> {
-
-        private Schema schema;
-        private final String schemaJson;
-
-        public JsonToGenericRecordFn(Schema schema) {
-            this.schemaJson = schema.toString();
-        }
-
-        @Setup
-        public void setup() {
-            schema = new Schema.Parser().parse(schemaJson);
-        }
+    private static class KVToIdFn extends DoFn<KV<Long, String>, List<Long>> {
 
         @ProcessElement
         public void processElement(ProcessContext c) {
-            String json = c.element();
-            GenericRecord record =
-                    new JsonAvroConverter()
-                            .convertToGenericDataRecord(json.getBytes(StandardCharsets.UTF_8), schema);
-            c.output(record);
+            KV<Long, String> kv = c.element();
+            c.output(new ArrayList<Long>(){{
+                add(kv.getKey());
+            }});
         }
-    }
-
-    public static Schema getAvroSchema() {
-        return new Schema.Parser().parse(SCHEMA);
     }
 
     private static class CollectIdsFn implements SerializableFunction<Iterable<List<Long>>, List<Long>> {
@@ -190,46 +97,12 @@ public class PubSubToBQ {
         }
     }
 
-    private static class GenericRecordToRowFn extends DoFn<GenericRecord, Row> {
-
-        private org.apache.beam.sdk.schemas.Schema schema;
-
-        public GenericRecordToRowFn(Schema schema) {
-            this.schema = AvroUtils.toBeamSchema(schema);
-        }
-
+    private static class JsonToTableRowConvertFn extends DoFn<String, TableRow> {
         @ProcessElement
         public void processElement(ProcessContext c) {
-            Row row = AvroUtils.toBeamRowStrict(c.element(), schema);
-            c.output(row);
-        }
-    }
-
-    private static class RowToTableRow extends DoFn<Row, TableRow> {
-
-        private org.apache.beam.sdk.schemas.Schema schema;
-
-        public RowToTableRow(Schema schema) {
-            this.schema = AvroUtils.toBeamSchema(schema);
-        }
-
-        public static TableRow convertJsonToTableRow(String json) {
-            TableRow row;
-            try (InputStream inputStream =
-                         new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))) {
-                row = TableRowJsonCoder.of().decode(inputStream, Coder.Context.OUTER);
-            } catch (IOException e) {
-                throw new RuntimeException("Failed to serialize json to table row: " + json, e);
-            }
-            return row;
-        }
-
-        @ProcessElement
-        public void processElement(ProcessContext c) {
-            RowJson.RowJsonSerializer rowJsonSerializer = RowJson.RowJsonSerializer.forSchema(schema);
-            String json = RowJsonUtils.rowToJson(RowJsonUtils.newObjectMapperWith(rowJsonSerializer), c.element());
-            TableRow row = convertJsonToTableRow(json);
-            c.output(row);
+            Gson gson = new Gson();
+            TableRow tableRow = gson.fromJson(c.element(), TableRow.class);
+            c.output(tableRow);
         }
     }
 
@@ -239,63 +112,93 @@ public class PubSubToBQ {
                         .withValidation()
                         .as(PubSubToBQOptions.class);
         Pipeline p = Pipeline.create(options);
-
-        Schema schema = getAvroSchema();
-        PCollection<List<Long>> input = p.apply("Read JSON from PubSub",
+        PCollection<KV<Long, String>> input = p.apply("Read JSON from PubSub",
                 PubsubIO.readStrings().fromSubscription(options.getSubscriptionPath()))
-                .apply("Convert JSON to Avro generic record",
-                        ParDo.of(new JsonToIdFn()))
-                .apply("Split to windows",
-                        Window.<List<Long>>into(FixedWindows.of(Duration.standardMinutes(1)))
-                                .triggering(AfterWatermark.pastEndOfWindow()
-                                        .withEarlyFirings(AfterProcessingTime.pastFirstElementInPane()
-                                                .plusDelayOf(Duration.standardSeconds(30)))
-                                        .withLateFirings(AfterPane.elementCountAtLeast(1)))
-                                .discardingFiredPanes()
-                                .withAllowedLateness(Duration.standardSeconds(15)));
+                .apply("Split to windows", Window.into(FixedWindows.of(Duration.standardMinutes(1))))
+                .apply("Extract ID from json and make pair",
+                        ParDo.of(new JsonToIdFn()));
 
-        PCollection<String> enrichedData = input
-                .apply("Collect window ids",
-                        Combine.globally(new CollectIdsFn()).withoutDefaults())
+        PCollection<KV<Long, String>> enrichedData = input
+                .apply("Collect window ids", Combine.globally(new CollectIds()).withoutDefaults())
                 .apply("Read additional info",
-                        JdbcIO.<List<Long>, String>readAll()
+                        JdbcIO.<List<Long>, KV<Long, String>>readAll()
                                 .withDataSourceConfiguration(
                                         JdbcIO.DataSourceConfiguration
                                                 .create(options.getDriverClassName(), options.getUrl())
                                                 .withUsername(options.getUsername())
                                                 .withPassword(options.getPassword()))
-                                .withQuery("SELECT * FROM avrotable WHERE id = ANY (?)")
-                                .withCoder(StringUtf8Coder.of())
+                                .withQuery("SELECT id, user_location_country, user_location_region, user_location_city" +
+                                        " FROM avrotable WHERE id = ANY (?)")
+                                .withCoder(KvCoder.of(VarLongCoder.of(), StringUtf8Coder.of()))
                                 .withParameterSetter((JdbcIO.PreparedStatementSetter<List<Long>>)
                                         (element, preparedStatement) -> {
                                     Array ids =
                                             preparedStatement.getConnection().createArrayOf(
                                                     "BIGINT", element.toArray(new Long[0]));
                                     preparedStatement.setArray(1, ids);
-                                }).withRowMapper((JdbcIO.RowMapper<String>) resultSet -> {
+                                }).withRowMapper((JdbcIO.RowMapper<KV<Long, String>>) resultSet -> {
                             int size = resultSet.getMetaData().getColumnCount();
                             ObjectMapper mapper = new ObjectMapper();
                             ObjectNode record = mapper.createObjectNode();
-                            for (int i = 1; i <= size; i++) {
+                            for (int i = 2; i <= size; i++) {
                                 String name = resultSet.getMetaData().getColumnName(i);
                                 Object value = resultSet.getObject(i);
                                 record.putPOJO(name, value);
                             }
-                            return mapper.writeValueAsString(record);
+                            Long id = resultSet.getLong("id");
+                            return KV.of(id, mapper.writeValueAsString(record));
                         }));
 
-        enrichedData.apply("Convert JSON to Avro generic record", ParDo.of(new JsonToGenericRecordFn(schema)))
-                .setCoder(AvroGenericCoder.of(schema))
-                .apply("Convert GenericRecord to Row", ParDo.of(new GenericRecordToRowFn(schema)))
-                .setCoder(RowCoder.of(AvroUtils.toBeamSchema(schema)))
-                .setRowSchema(AvroUtils.toBeamSchema(schema))
-                .apply("Convert Row to TableRow", ParDo.of(new RowToTableRow(schema)))
-                .apply("Write data to BigQuery", CounterAndWriteUnited.of(
+        GroupByKey.applicableTo(enrichedData);
+        TupleTag<String> INPUT_TAG = new TupleTag<>();
+        TupleTag<String> ENRICHED_TAG = new TupleTag<>();
+
+        PCollection<String> result = KeyedPCollectionTuple
+                .of(INPUT_TAG, input)
+                .and(ENRICHED_TAG, enrichedData)
+                .apply("Merge pcollections", CoGroupByKey.create())
+                .apply("Compose Final Object",
+                        ParDo.of(new DoFn<KV<Long, CoGbkResult>, String>() {
+                            @ProcessElement
+                            public void processElement(ProcessContext c) {
+                                String originalJson = c.element().getValue().getOnly(INPUT_TAG);
+                                String additionalJson = c.element().getValue().getOnly(ENRICHED_TAG);
+
+                                ObjectMapper mapper = new ObjectMapper();
+                                ObjectNode record = mapper.createObjectNode();
+                                try {
+                                    JsonNode inputRecord = mapper.readTree(originalJson);
+                                    JsonNode additionalRecord = mapper.readTree(additionalJson);
+                                    for (Iterator<Map.Entry<String, JsonNode>> it = inputRecord.fields();
+                                         it.hasNext(); ) {
+                                        Map.Entry<String, JsonNode> next = it.next();
+                                        record.putPOJO(next.getKey(), next.getValue());
+                                    }
+                                    for (Iterator<Map.Entry<String, JsonNode>> it = additionalRecord.fields();
+                                         it.hasNext(); ) {
+                                        Map.Entry<String, JsonNode> next = it.next();
+                                        record.putPOJO(next.getKey(), next.getValue());
+                                    }
+                                } catch (JsonProcessingException e) {
+                                    e.printStackTrace();
+                                }
+                                String json = null;
+                                try {
+                                    json = mapper.writeValueAsString(record);
+                                } catch (JsonProcessingException e) {
+                                    e.printStackTrace();
+                                }
+                                c.output(json);
+                            }
+                        }));
+
+        result.apply("Convert JSON to TableRow", ParDo.of(new JsonToTableRowConvertFn()))
+                .apply("Write data to BigQuery",
                         BigQueryIO.writeTableRows()
-                                .withSchema(BigQueryUtils.toTableSchema(AvroUtils.toBeamSchema(schema)))
+                                .withSchema(BQPubSubTableSchema.createSchema())
                                 .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
                                 .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-                                .to(options.getOutputTable())));
+                                .to(options.getOutputTable()));
 
         p.run().waitUntilFinish();
     }
