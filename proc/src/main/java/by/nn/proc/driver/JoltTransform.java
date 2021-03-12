@@ -16,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class JoltTransform {
 
-    private static class JoltMapper implements ValueMapper<String, String> {
+    public static class JoltMapper implements ValueMapper<String, String> {
 
         private String transform(String input) {
             Chainr chainr = Chainr.fromSpec(JsonUtils.classpathToList("/spec.json"));
