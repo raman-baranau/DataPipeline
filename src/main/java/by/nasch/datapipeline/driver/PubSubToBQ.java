@@ -25,7 +25,6 @@ import org.apache.beam.sdk.values.TupleTag;
 import org.joda.time.Duration;
 
 import java.sql.Array;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -71,29 +70,6 @@ public class PubSubToBQ {
             Gson gson = new Gson();
             Map<String,Object> result = gson.fromJson(json, Map.class);
             c.output(KV.of(((Double) result.get("id")).longValue(), json));
-        }
-    }
-
-    private static class KVToIdFn extends DoFn<KV<Long, String>, List<Long>> {
-
-        @ProcessElement
-        public void processElement(ProcessContext c) {
-            KV<Long, String> kv = c.element();
-            c.output(new ArrayList<Long>(){{
-                add(kv.getKey());
-            }});
-        }
-    }
-
-    private static class CollectIdsFn implements SerializableFunction<Iterable<List<Long>>, List<Long>> {
-
-        @Override
-        public List<Long> apply(Iterable<List<Long>> input) {
-            List<Long> ids = new ArrayList<>();
-            for (List<Long> record : input) {
-                ids.add(record.get(0));
-            }
-            return ids;
         }
     }
 
