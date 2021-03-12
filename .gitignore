@@ -3,6 +3,8 @@
 *.avro
 *.avsc
 /target
+*/target
+/proc/target
 *.class
 
 
