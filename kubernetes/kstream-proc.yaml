@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ks-proc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ks-proc
+  template:
+    metadata:
+      labels:
+        app: ks-proc
+    spec:
+      containers:
+      - name: ks-proc
+        image: gcr.io/planningmeme/kstream-proc:1.0

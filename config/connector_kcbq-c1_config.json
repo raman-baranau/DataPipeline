@@ -1,0 +1,23 @@
+{
+  "name": "kcbq-c1",
+  "config": {
+    "connector.class": "com.wepay.kafka.connect.bigquery.BigQuerySinkConnector",
+    "tasks.max": "1",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "topics": "kcbq-topic",
+    "project": "planningmeme",
+    "defaultDataset": "avroset",
+    "keyfile": "/usr/share/java/gcp_cred.json",
+    "sanitizeTopics": "true",
+    "autoCreateTables": "false",
+    "autoCreateBucket": "false",
+    "allowNewBigQueryFields": "false",
+    "timePartitioningType": "DAY",
+    "maxWriteSize": "10000",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false",
+    "tableWriteWait": "1000",
+    "bufferSize": "100000"
+  }
+}

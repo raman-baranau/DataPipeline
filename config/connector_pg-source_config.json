@@ -1,0 +1,22 @@
+{
+  "name": "pg-source",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "1",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "connection.url": "jdbc:postgresql://34.89.136.98:5432/postgres",
+    "connection.user": "postgres",
+    "connection.password": "b4KnhkDkL8p9dFfz",
+    "table.whitelist": "avrotable",
+    "dialect.name": "PostgreSqlDatabaseDialect",
+    "mode": "incrementing",
+    "incrementing.column.name": "id",
+    "timestamp.column.name": "modified",
+    "poll.interval.ms": "1000",
+    "batch.max.rows": "100",
+    "topic.prefix": "in-jdbc",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false"
+  }
+}
